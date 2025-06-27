@@ -1,8 +1,46 @@
 import streamlit as st
+from dotenv import load_dotenv
 import os
 import requests
+from datetime import datetime
+
+def format_message(who, text, ts):
+    """Return an HTML chat bubble for user or agent with dark-mode friendly colors."""
+    if who == "user":
+        bg = "#2E7D32"   # deep green
+        align = "right"
+        avatar = "🧑"
+        text_color = "#FFFFFF"  # white text
+    else:
+        bg = "#1565C0"   # deep blue
+        align = "left"
+        avatar = "🤖"
+        text_color = "#FFFFFF"  # white text
+
+    html = f"""
+    <div style="
+        background-color: {bg};
+        color: {text_color};
+        padding: 8px 12px;
+        border-radius: 12px;
+        max-width: 70%;
+        margin: 6px;
+        text-align: {align};
+        font-family: sans-serif;
+        ">
+      <small style="font-size:10px;color:#CCCCCC;">{ts}</small><br>
+      <span style="font-size:18px;">{avatar}</span> {text}
+    </div>
+    """
+    return html
+
+
+
 
 st.set_page_config(page_title="GenAI Multi-Agent BFSI Assistant", page_icon="🔮")
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
 st.title("🔮 GenAI Multi-Agent Insurance Assistant")
 
@@ -10,9 +48,10 @@ st.title("🔮 GenAI Multi-Agent Insurance Assistant")
 # ✅ 1) API Key Management
 # ===========================
 # Set your Mistral API key here or as an environment variable:
+
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")  # Or hardcode for testing:
 # MISTRAL_API_KEY = "your_actual_key_here"
-
+load_dotenv()
 if not MISTRAL_API_KEY:
     st.error("❌ Mistral API key not found! Please set the MISTRAL_API_KEY environment variable.")
     st.stop()
@@ -149,7 +188,38 @@ if st.button("🚀 Get Response"):
     else:
         with st.spinner(f"Talking to the {agent}..."):
             answer = get_mistral_response(PROMPTS[agent], user_input)
-            st.success(f"**{agent} Response:**\n\n{answer}")
+
+            now = datetime.now().strftime("%B %d, %I:%M %p")
+
+            # Save this turn to session state
+            st.session_state.chat_history.append({
+                "agent": agent,
+                "user_input": user_input,
+                "agent_response": answer,
+                "timestamp": now,
+            })
+
+            print("Saved chat:", st.session_state.chat_history[-1])  # this line for debugging
+
+# Show response immediately
+if 'answer' in locals():
+    st.success(f"**{agent} Response:**\n\n{answer}")
+else:
+    st.warning("Start a conversation.")
+
+
+st.markdown("## 🗨️ Chat History")
+
+if st.session_state.chat_history:
+    for chat in st.session_state.chat_history:
+        ts = chat.get("timestamp", "No timestamp")
+        # User bubble
+        st.markdown(format_message("user", chat["user_input"], ts), unsafe_allow_html=True)
+        # Agent bubble
+        st.markdown(format_message("agent", chat["agent_response"], ts), unsafe_allow_html=True)
+
+st.markdown("---")
+
 
 # ===========================
 # ✅ 6) Optional: Display Mock Products for Recommender
