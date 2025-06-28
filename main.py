@@ -1,5 +1,8 @@
 import sqlite3
 import streamlit as st
+from summary import create_summary_prompt, create_pdf
+
+from summary import create_summary_prompt, create_pdf
 
 st.set_page_config(page_title="GenAI Multi-Agent BFSI Assistant", page_icon="🔮")
 from dotenv import load_dotenv
@@ -45,58 +48,81 @@ def format_message(who, text, ts):
     return html
 
 
-
-
-# Add login/signup section at the top
-st.sidebar.title("🔑 Login / Signup")
+# Add login/signup section at the top (STATIC DEMO ONLY)
+st.sidebar.title("🔑 Login / Signup (Demo)")
 
 # Show login/signup forms only if user not logged in yet
 if "username" not in st.session_state:
     auth_mode = st.sidebar.radio("Select Mode:", ("Login", "Sign Up"))
 
-    username = st.sidebar.text_input("Username")
+    username = st.sidebar.text_input("Username (static demo)")
     password = st.sidebar.text_input("Password", type="password")
 
     if auth_mode == "Login":
         if st.sidebar.button("Login"):
-            user = get_user(username)
-            if user and verify_password(password, user[2]):  # user[2] is hashed password
-                st.session_state["username"] = username
-
-                # ✅ Load user chat history on successful login
-                chat_records = get_chat_history(username)
-                st.session_state.chat_history = []
-                for role, message, timestamp in chat_records:
-                    if role == "user":
-                        st.session_state.chat_history.append({
-                            "agent": None,
-                            "user_input": message,
-                            "agent_response": None,
-                            "timestamp": timestamp,
-                        })
-                    elif role == "agent" and st.session_state.chat_history:
-                        st.session_state.chat_history[-1]["agent_response"] = message
-
-                st.experimental_rerun()  # refresh app to show chatbot
-            else:
-                st.sidebar.error("Invalid username or password.")
-
+            st.sidebar.info("🔒 Login functionality is disabled for this demo.")
     elif auth_mode == "Sign Up":
         if st.sidebar.button("Sign Up"):
-            if get_user(username):
-                st.sidebar.error("Username already exists.")
-            else:
-                hashed_pwd = hash_password(password)
-                add_user(username, hashed_pwd)
-                st.sidebar.success("Account created. Please log in.")
+            st.sidebar.info("🔒 Sign up functionality is disabled for this demo.")
 
-# If logged in, show logged-in username
+# If logged in, show logged-in username (but disable logout too)
 else:
-    st.sidebar.success(f"Logged in as: {st.session_state['username']}")
+    st.sidebar.success(f"Logged in as: {st.session_state['username']} (static demo)")
     if st.sidebar.button("Logout"):
-        del st.session_state["username"]
-        st.session_state.chat_history = []
-        st.experimental_rerun()
+        st.sidebar.info("🔒 Logout functionality is disabled for this demo.")
+
+
+
+# # Add login/signup section at the top
+# st.sidebar.title("🔑 Login / Signup")
+
+# # Show login/signup forms only if user not logged in yet
+# if "username" not in st.session_state:
+#     auth_mode = st.sidebar.radio("Select Mode:", ("Login", "Sign Up"))
+
+#     username = st.sidebar.text_input("Username")
+#     password = st.sidebar.text_input("Password", type="password")
+
+#     if auth_mode == "Login":
+#         if st.sidebar.button("Login"):
+#             user = get_user(username)
+#             if user and verify_password(password, user[2]):  # user[2] is hashed password
+#                 st.session_state["username"] = username
+
+#                 # ✅ Load user chat history on successful login
+#                 chat_records = get_chat_history(username)
+#                 st.session_state.chat_history = []
+#                 for role, message, timestamp in chat_records:
+#                     if role == "user":
+#                         st.session_state.chat_history.append({
+#                             "agent": None,
+#                             "user_input": message,
+#                             "agent_response": None,
+#                             "timestamp": timestamp,
+#                         })
+#                     elif role == "agent" and st.session_state.chat_history:
+#                         st.session_state.chat_history[-1]["agent_response"] = message
+
+#                 st.experimental_rerun()  # refresh app to show chatbot
+#             else:
+#                 st.sidebar.error("Invalid username or password.")
+
+#     elif auth_mode == "Sign Up":
+#         if st.sidebar.button("Sign Up"):
+#             if get_user(username):
+#                 st.sidebar.error("Username already exists.")
+#             else:
+#                 hashed_pwd = hash_password(password)
+#                 add_user(username, hashed_pwd)
+#                 st.sidebar.success("Account created. Please log in.")
+
+# # If logged in, show logged-in username
+# else:
+#     st.sidebar.success(f"Logged in as: {st.session_state['username']}")
+#     if st.sidebar.button("Logout"):
+#         del st.session_state["username"]
+#         st.session_state.chat_history = []
+#         st.experimental_rerun()
 
 
 
@@ -236,14 +262,15 @@ def get_mistral_response(prompt, user_input):
 # ===========================
 st.markdown("""
     <div style="
-        background-color:rgba(33,150,243,0.2);
-        border-radius:15px;
-        padding:25px;
-        margin-bottom:30px;
-        text-align:center;
-        box-shadow:0 4px 8px rgba(0,0,0,0.4);">
-        <h1 style='color:#4A90E2; margin:0;'>⭐ GenAI Multi-Agent Insurance Assistant</h1>
-        <p style='color:#DDDDDD; font-size:16px; margin-top:10px;'>Your one-stop solution for insurance recommendations, claim assistance, and more — powered by AI.</p>
+        background-color: rgba(255, 255, 255, 0.8);
+        border-radius: 15px;
+        padding: 25px;
+        margin-bottom: 30px;
+        text-align: center;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    ">
+        <h1 style='color: #212121; margin:0;'>⭐ GenAI Multi-Agent Insurance Assistant</h1>
+        <p style='color: #212121; font-size:16px; margin-top:10px;'>Your one-stop solution for insurance recommendations, claim assistance, and more — powered by AI.</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -259,46 +286,50 @@ agent = st.selectbox(
 st.markdown("---")
 
 # Chat history container with dark-friendly styling
-st.markdown("""
-    <div style="
-        background-color:rgba(255,255,255,0.05);
-        border-radius:12px;
-        padding:20px;
-        box-shadow:0 4px 8px rgba(0,0,0,0.3);
-        max-height:500px;
-        overflow-y:auto;
-        margin-bottom:20px;">
-""", unsafe_allow_html=True)
+
 
 if st.session_state.chat_history:
     for chat in st.session_state.chat_history:
         # User's message block
         st.markdown(f"""
             <div style="
-                background-color:rgba(76,175,80,0.2);
-                border-radius:8px;
-                padding:10px;
-                margin-bottom:8px;
-                color:#EEEEEE;">
+                background-color: rgba(255, 255, 255, 0.8);
+                border-radius: 8px;
+                padding: 10px;
+                margin-bottom: 8px;
+                color: #212121;
+            ">
                 <strong>🧑 You:</strong> {chat['user_input']}
-                <div style="text-align:right; font-size:10px; color:#BBBBBB;">🕒 {chat['timestamp']}</div>
+                <div style="text-align:right; font-size:10px; color:#555555;">🕒 {chat['timestamp']}</div>
             </div>
         """, unsafe_allow_html=True)
 
         # Agent's message block
         st.markdown(f"""
             <div style="
-                background-color:rgba(33,150,243,0.2);
-                border-radius:8px;
-                padding:10px;
-                margin-bottom:15px;
-                color:#EEEEEE;">
+                background-color: rgba(255, 255, 255, 0.8);
+                border-radius: 8px;
+                padding: 10px;
+                margin-bottom: 15px;
+                color: #212121;
+            ">
                 <strong>🤖 {chat['agent']}:</strong> {chat['agent_response']}
-                <div style="text-align:right; font-size:10px; color:#BBBBBB;">🕒 {chat['timestamp']}</div>
+                <div style="text-align:right; font-size:10px; color:#555555;">🕒 {chat['timestamp']}</div>
             </div>
         """, unsafe_allow_html=True)
 else:
-    st.markdown("<p style='color:#AAAAAA;'>No conversation yet. Start by typing below! 🚀</p>", unsafe_allow_html=True)
+    st.markdown(f"""
+        <div style="
+            background-color:rgba(255,255,255,0.05);
+            border-radius:8px;
+            padding:20px;
+            margin-bottom:10px;
+            text-align:center;
+            color:#AAAAAA;">
+            No conversation yet. Start by typing below! 🚀
+        </div>
+    """, unsafe_allow_html=True)
+
 
 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -328,6 +359,35 @@ if user_input:
 
         st.experimental_rerun()  # Refresh chat display
 
+        if st.button("📄 Download Conversation Summary as PDF"):
+            summary_text = create_summary_prompt(st.session_state.chat_history)
+            create_pdf(summary_text)
+            with open("chat_summary.pdf", "rb") as f:
+                st.download_button(
+                    label="Download PDF",
+                    data=f,
+                    file_name="chat_summary.pdf",
+                    mime="application/pdf",
+                )
+
+            import base64
+
+if st.session_state.chat_history:
+    st.markdown("---")
+    # Generate summary when the user clicks download button
+    summary_text = create_summary_prompt(st.session_state.chat_history)
+    create_pdf(summary_text)
+    with open("chat_summary.pdf", "rb") as f:
+        st.download_button(
+            label="📥 Download PDF Summary",
+            data=f,
+            file_name="chat_summary.pdf",
+            mime="application/pdf",
+        )
+
+
+
+
 # ===========================
 # ✅ 6) Optional: Display Mock Products for Recommender
 # ===========================
@@ -335,14 +395,22 @@ if user_input:
 #     st.markdown("---")
 #     st.subheader("📦 Example Insurance Products")
 #     for product in INSURANCE_PRODUCTS:
-#         st.markdown(
-#             f"""
-#             <div style='background-color:rgba(255,255,255,0.05); border-radius:8px; padding:10px; margin-bottom:10px; color:#EEEEEE;'>
-#                 <strong>{product['name']}</strong><br>
-#                 • Type: {product['type']}<br>
-#                 • Risk: {product['risk']}<br>
-#                 • Features: {product['features']}
-#             </div>
-#             """,
-#             unsafe_allow_html=True,
-#         )
+        # st.markdown(
+        #     f"""
+        #     <div style='
+        #         background-color: rgba(255, 255, 255, 0.8);
+        #         border-radius: 8px;
+        #         padding: 10px;
+        #         margin-bottom: 10px;
+        #         color: #212121;
+        #     '>
+        #         <strong>{product['name']}</strong><br>
+        #         • Type: {product['type']}<br>
+        #         • Risk: {product['risk']}<br>
+        #         • Features: {product['features']}
+        #     </div>
+        #     """,
+        #     unsafe_allow_html=True,
+        # )
+
+        
