@@ -51,6 +51,34 @@ All powered by a Streamlit frontend, Mistral LLM API, and SQLite backend.
 
 ---
 
+## UI AI Generated (Future Scope)
+
+###  Profile Page
+
+![Profile](Prototype_SS/Profile%20Dark.png)
+
+### Login
+
+![Login](Prototype_SS/Login%20Dark.png)
+
+### Signup
+
+![Signup](Prototype_SS/Signup%20dark.png)
+
+### Dashboard
+
+![Dashboard](Prototype_SS/Dashboard%20Dark.png)
+
+### Chat History
+
+![Chat History](Prototype_SS/Chat%20History%20Dark.png)
+
+### Settings
+
+![Setting](Prototype_SS/User%20dark.png)
+
+
+
 ## Project Structure
 
 
