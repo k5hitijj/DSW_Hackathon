@@ -21,7 +21,11 @@ __pycache__/
 node_modules/
 
 # Virtual environment
-.venv/
+.venv
 
 # Environment variables file
 .env
+
+#extra
+env/
+venv/
