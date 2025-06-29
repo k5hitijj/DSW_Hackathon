@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.db
+*.env
+.DS_Store
+
+# VSCode
+.vscode/
+
+# OS / Editor backups
+*.swp
+*.swo
+*~
+
+# Streamlit cache
+.streamlit/
+
+# Node.js
+node_modules/
