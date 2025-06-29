@@ -117,6 +117,29 @@ All powered by a Streamlit frontend, Mistral LLM API, and SQLite backend.
         create_summary_prompt(chat_history) → str
 
         create_pdf(summary_text, pdf_path)
+
+## Setup & Installation
+
+Deployed via Streamlit Cloud.
+To deploy:
+
+Push code to GitHub
+
+Connect GitHub repo to Streamlit Cloud
+
+Set MISTRAL_API_KEY in Secrets Manager
+
+```bash
+  npm run deploy
+```
+
+git clone 
+```bash
+https://github.com/your‑username/genai‑bfsi‑assistant.git
+
+cd genai‑bfsi‑assistant
+```
+
 ## Run Locally
 
 Clone the project
@@ -147,29 +170,6 @@ Run the Streamlit App
   Run the Streamlit App
 ```
 
-
-## Setup & Installation
-
-Deployed via Streamlit Cloud.
-To deploy:
-
-Push code to GitHub
-
-Connect GitHub repo to Streamlit Cloud
-
-Set MISTRAL_API_KEY in Secrets Manager
-
-```bash
-  npm run deploy
-```
-
-git clone https://github.com/your‑username/genai‑bfsi‑assistant.git
-cd genai‑bfsi‑assistant
-
-
-## Install dependencies
-
-pip install -r requirements.txt
 
 
 
