@@ -149,54 +149,54 @@ if not MISTRAL_API_KEY:
 # ✅ 2) Agent Prompts
 # ===========================
 PROMPTS = {
-    "Insurance Recommender": (
-        "You are a professional insurance advisor named Kshitij. You always: "
-        "• Ask clarifying questions if input is incomplete."
-        "• Recommend 1–2 products from your catalog, with bullet-pointed reasons."
-        "• Use a friendly, concise tone."
+        "Insurance Recommender": {
+            "system": """
+    You are Kshitij, an expert Insurance Product Recommender.
+    • Ask clarifying questions if user data (age, income, goals, risk) is missing.
+    • Recommend exactly 2 to 3 plans from our catalog, with bullet point reasons.
+    • Use a friendly, concise tone.
+    """,
+            "examples": [
+                {
+                    "user": "I am 28, healthy, want medium-term savings, can pay 15,000 yearly.",
+                    "assistant": "• **HealthShield Plus** – hospitalization & surgery cover\n• **SecureLife Plan** – tax benefits + life cover rider"
+                }
+            ],
+            "defer": "I’m the Product Recommender. For claim‑filing questions, please ask the Claim Filing Helper agent."
+        },
 
-       " EXAMPLE: User: I’m 28, healthy, want medium-term savings, can pay 15,000 yearly. "
-        "Advisor: • I recommend the **HealthShield Plus** for your health needs—benefits include hospitalization cover and surgery reimbursements."
-        "• As an alternative, **SecureLife Plan** gives you tax benefits with a small life-cover rider."
-            ),
+        "Claim Filing Helper": {
+            "system": """
+    You are Kshitij, an expert Claims Filing Assistant.
+    • Guide the user step‑by‑step through the claim process.
+    • Ask what happened, what documents they have, and next steps.
+    • Close with “Did this help? (Yes/No)”
+    """,
+            "examples": [
+                {
+                    "user": "How do I file a health insurance claim?",
+                    "assistant": "1. Describe the incident…\n2. Upload hospital bills…\n3. Submit the claim form at our portal.\nDid this help? (Yes/No)"
+                }
+            ],
+            "defer": "I’m the Claim Filing Helper. For product recommendations, please ask the Insurance Recommender agent."
+        },
 
-    "Claim Filing Helper": (
-        "You are an insurance customer support agent named Kshitij. You always:"
-        "• Answer clearly and concisely in 2–4 sentences."
-        "• Use friendly, approachable tone."
-        "• Include a brief “Did this help?” prompt at the end."
-
-        "EXAMPLE 1:"
-        "User: How long does it take to process a life insurance claim?"
-        "Assistant: "
-        "Typically, life insurance claims are processed within 7–14 business days after all documents are received. If additional information is needed, it may take a few extra days. " 
-        "Did this help? (Yes/No)"
-
-        "EXAMPLE 2:"
-        "User: What does my health policy cover?"
-        "Assistant:"
-        "Your health policy covers hospitalization costs, day-care procedures, and pre- and post-hospitalization expenses up to the sum insured. It also includes free annual health checkups."
-        "Did this help? (Yes/No)"
-
-    ),
-
-    "General Q&A": (
-        "You are an insurance customer support agent named Kshitij. You always:"
-        "• Answer clearly and concisely in 2–4 sentences."
-        "• Use friendly, approachable tone."
-
-        "EXAMPLE 1:"
-        "User: How long does it take to process a life insurance claim?"
-        "Assistant:" 
-        "Typically, life insurance claims are processed within 7–14 business days after all documents are received. If additional information is needed, it may take a few extra days."  
-
-        "EXAMPLE 2:"
-       "User: What does my health policy cover?"
-        "Assistant:"
-        "Your health policy covers hospitalization costs, day-care procedures, and pre- and post-hospitalization expenses up to the sum insured. It also includes free annual health checkups."  
-        "Do you have any further questions?"
-            )
+        "General Q&A": {
+            "system": """
+    You are Kshitij, an expert Insurance Policy Q&A agent.
+    • Answer policy questions clearly in 2–4 sentences.
+    • Use a friendly, approachable tone.
+    """,
+            "examples": [
+                {
+                    "user": "What does my health policy cover?",
+                    "assistant": "It covers hospitalization costs, day‑care procedures, and pre‑/post‑hospitalization expenses up to the sum insured."
+                }
+            ],
+            "defer": "I’m the Q&A agent. For product recommendations, ask the Insurance Recommender; for claims, ask the Claim Filing Helper."
         }
+    }
+
 
 # ===========================
 # ✅ 3) Optional Mock Products
@@ -223,35 +223,67 @@ INSURANCE_PRODUCTS = [
 ]
 
 # ===========================
-# ✅ 4) Mistral Chat Function
+## ===========================
+# ✅ 4) Mistral Chat + Router
 # ===========================
+
 def get_mistral_response(prompt, user_input):
     headers = {
         "Authorization": f"Bearer {MISTRAL_API_KEY}",
         "Content-Type": "application/json"
     }
-
     data = {
-        "model": "mistral-small",  # Or mistral-medium if available
+        "model": "mistral-small",
         "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": user_input}
+            {"role": "system",  "content": prompt},
+            {"role": "user",    "content": user_input}
         ],
-        "temperature": 0.7,
+        "temperature": 0.5,
         "max_tokens": 500
     }
-
     response = requests.post(
         "https://api.mistral.ai/v1/chat/completions",
         headers=headers,
         json=data
     )
-
     if response.status_code == 200:
         return response.json()["choices"][0]["message"]["content"].strip()
     else:
         return f"❌ API Error: {response.status_code} - {response.text}"
 
+
+def route_or_call(agent_key, user_input):
+    """
+    Routes out‑of‑scope queries to the agent’s defer message,
+    otherwise builds the system prompt + examples and calls the LLM.
+    """
+    lower = user_input.lower()
+    # 👉 1) Handle greetings directly
+    if lower.strip() in ["hi", "hello", "hey"]:
+        return "👋 Hello! Please enter a question about insurance so I can assist you effectively."
+
+    p = PROMPTS[agent_key]
+
+    # 1) Defer if it’s outside this agent’s domain
+    if agent_key == "Insurance Recommender" and "claim" in lower:
+        return p["defer"]
+    if agent_key == "Claim Filing Helper" and any(k in lower for k in ["recommend", "plan", "suggest"]):
+        return p["defer"]
+    if agent_key == "General Q&A" and any(k in lower for k in ["recommend", "claim", "file"]):
+        return p["defer"]
+
+    # 2) Build prompt + few‑shot examples
+    prompt = p["system"].strip()
+    for ex in p["examples"]:
+        prompt += f"\n\nUser: {ex['user']}\nAssistant: {ex['assistant']}"
+    prompt += f"\n\nUser: {user_input}\nAssistant:"
+
+    # 3) Call the LLM
+    return get_mistral_response(prompt, user_input)
+
+
+
+# ===========================
 # ===========================
 # ===========================
 # ===========================
@@ -273,6 +305,26 @@ st.markdown("""
         <p style='color: #212121; font-size:16px; margin-top:10px;'>Your one-stop solution for insurance recommendations, claim assistance, and more — powered by AI.</p>
     </div>
 """, unsafe_allow_html=True)
+
+
+# ✅ Link to Google Docs with example questions
+st.markdown("""
+<div style="
+    background-color: rgba(76, 175, 80, 0.15);
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 20px;
+    text-align: center;
+">
+    <h3 style="color:#2E7D32; margin:0;">📖 Need sample questions?</h3>
+    <p style="color:#212121; margin-top:8px;">
+        <a href="https://docs.google.com/document/d/1eEonl9zTVJSpAVu4fK743nRzKbzkc1EzEH-Y0BHU7Cg/edit?usp=sharing" target="_blank" style="color:#1565C0; text-decoration:none; font-weight:bold;">
+            👉 Click here to view example prompts you can try with each agent!
+        </a>
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
 
 
 st.markdown("<h2 style='color:#4A90E2;'>🧠 Choose the agent you'd like to interact with:</h2>", unsafe_allow_html=True)
@@ -340,7 +392,7 @@ user_input = st.chat_input("E.g., I am 30 years old with a budget of 20,000/year
 
 if user_input:
     with st.spinner(f"💭 Talking to {agent}..."):
-        answer = get_mistral_response(PROMPTS[agent], user_input)
+        answer = route_or_call(agent, user_input)
 
         now = datetime.now().strftime("%B %d, %I:%M %p")
 
@@ -395,22 +447,22 @@ if st.session_state.chat_history:
 #     st.markdown("---")
 #     st.subheader("📦 Example Insurance Products")
 #     for product in INSURANCE_PRODUCTS:
-        # st.markdown(
-        #     f"""
-        #     <div style='
-        #         background-color: rgba(255, 255, 255, 0.8);
-        #         border-radius: 8px;
-        #         padding: 10px;
-        #         margin-bottom: 10px;
-        #         color: #212121;
-        #     '>
-        #         <strong>{product['name']}</strong><br>
-        #         • Type: {product['type']}<br>
-        #         • Risk: {product['risk']}<br>
-        #         • Features: {product['features']}
-        #     </div>
-        #     """,
-        #     unsafe_allow_html=True,
-        # )
+#         st.markdown(
+#             f"""
+#             <div style='
+#                 background-color: rgba(255, 255, 255, 0.8);
+#                 border-radius: 8px;
+#                 padding: 10px;
+#                 margin-bottom: 10px;
+#                 color: #212121;
+#             '>
+#                 <strong>{product['name']}</strong><br>
+#                 • Type: {product['type']}<br>
+#                 • Risk: {product['risk']}<br>
+#                 • Features: {product['features']}
+#             </div>
+#             """,
+#             unsafe_allow_html=True,
+#         )
 
         
