@@ -14,6 +14,17 @@ from auth import hash_password, verify_password, get_user, add_user
 from db import create_users_table
 
 
+# Initialize a per‑session profile for personalization
+if "profile" not in st.session_state:
+    st.session_state.profile = {
+        "age": None,
+        "income": None,
+        "goals": None,
+        "risk_appetite": None
+    }
+
+
+
 create_users_table()
 
 
@@ -70,6 +81,19 @@ else:
     st.sidebar.success(f"Logged in as: {st.session_state['username']} (static demo)")
     if st.sidebar.button("Logout"):
         st.sidebar.info("🔒 Logout functionality is disabled for this demo.")
+        
+        # ─── User Profile (required before chat) ─────
+with st.sidebar.expander("👤 Your Profile (helps me personalize)"):
+    p = st.session_state.profile
+    p["age"] = st.number_input("Age", min_value=0, max_value=100, value=p["age"] or 0, key="expander_age")
+    p["income"] = st.number_input("Monthly income (₹)", min_value=0, value=p["income"] or 0, key="expander_income")
+    p["goals"] = st.text_input("Goals (e.g. savings, tax benefits)", value=p["goals"] or "")
+    p["risk_appetite"] = st.selectbox(
+        "Risk appetite", ["Low", "Medium", "High"],
+        index=["Low","Medium","High"].index(p["risk_appetite"]) if p["risk_appetite"] else 1
+    )
+# ───────────────────────────────────────────────
+
 
 
 
@@ -125,6 +149,10 @@ else:
 #         st.experimental_rerun()
 
 
+# ✅ Require age and income before allowing chat
+if not st.session_state.profile["age"] or not st.session_state.profile["income"]:
+    st.warning("🚨 Please complete your profile (Age and Income are required) before asking a question!")
+    st.stop()  # Stops the app here until profile filled
 
 
 
@@ -151,49 +179,93 @@ if not MISTRAL_API_KEY:
 PROMPTS = {
         "Insurance Recommender": {
             "system": """
-    You are Kshitij, an expert Insurance Product Recommender.
-    • Ask clarifying questions if user data (age, income, goals, risk) is missing.
-    • Recommend exactly 2 to 3 plans from our catalog, with bullet point reasons.
-    • Use a friendly, concise tone.
+    You are Kshitij, an expert Insurance Product Recommender.
+    • Greet the user warmly.
+    • Answer ONLY questions about recommending insurance products (Life, Health, Car, Home, Travel) OR explaining their policy details (coverage, limits, riders).
+    • If the user asks about filing or tracking a claim, reply:
+    “Claims are outside my scope. Please ask the Claim Filing Helper agent.”
+    • If the question is neither recommendation, policy detail, nor insurance‑related, reply:
+    “Sorry, I only handle insurance recommendations and policy details.”
+    • If any required user info (age, income, goals, risk) is missing for a recommendation, ask a friendly clarifier.
+    • Otherwise recommend 1–2 products (bullet‑pointed) with reasons.
+    • Be conversational, concise, and helpful.
     """,
             "examples": [
                 {
-                    "user": "I am 28, healthy, want medium-term savings, can pay 15,000 yearly.",
-                    "assistant": "• **HealthShield Plus** – hospitalization & surgery cover\n• **SecureLife Plan** – tax benefits + life cover rider"
+                    "user": "What does my SecureLife Plan cover?",
+                    "assistant": "Hello! Your SecureLife Plan provides:\n• A death benefit equal to the sum insured\n• Tax savings under Section 80C\n• Optional riders like critical illness cover—let me know if you want details on any rider!"
+                },
+                {
+                    "user": "I’m 40, moderate risk, want long‑term growth, ₹30,000/year budget.",
+                    "assistant": "Great! Based on your profile:\n• **SecureLife Plan** (Life): Family protection + tax benefits.\n• **InvestSmart ULIP**: Market‑linked returns + life cover.\nNeed more detail on either?"
+                },
+                {
+                    "user": "How do I file a claim?",
+                    "assistant": "Claims are outside my scope. Please ask the Claim Filing Helper agent."
+                },
+                {
+                    "user": "Tell me a joke.",
+                    "assistant": "Sorry, I only handle insurance recommendations and policy details."
                 }
             ],
-            "defer": "I’m the Product Recommender. For claim‑filing questions, please ask the Claim Filing Helper agent."
+            "defer": "Claims are outside my scope. Please ask the Claim Filing Helper agent."
         },
 
         "Claim Filing Helper": {
             "system": """
-    You are Kshitij, an expert Claims Filing Assistant.
-    • Guide the user step‑by‑step through the claim process.
-    • Ask what happened, what documents they have, and next steps.
-    • Close with “Did this help? (Yes/No)”
+    You are Kshitij, an expert Claim Filing Helper.
+    • Greet the user cheerfully.
+    • Answer ONLY questions about filing, submitting, or tracking insurance claims (Health, Life, Car, Home, Travel).
+    • If the user asks for product recommendations or policy explanations, reply:
+    “Recommendations are outside my scope. Please ask the Insurance Recommender agent.”
+    • If the question is neither claim‑related nor insurance‑related, reply:
+    “Sorry, I only assist with insurance claims.”
+    • Provide step‑by‑step guidance, ask for any missing claim details, and confirm next steps.
+    • Be conversational, concise, and supportive.
     """,
             "examples": [
                 {
-                    "user": "How do I file a health insurance claim?",
-                    "assistant": "1. Describe the incident…\n2. Upload hospital bills…\n3. Submit the claim form at our portal.\nDid this help? (Yes/No)"
+                    "user": "How do I file a car insurance claim for windshield damage?",
+                    "assistant": "Sure! To file that claim:\n1. Take clear photos of the damage.\n2. Notify your insurer via app or call within 7 days.\n3. Submit photos + claim form.\n4. Wait for surveyor inspection. Need help?"
+                },
+                {
+                    "user": "Which plan should I buy next?",
+                    "assistant": "Recommendations are outside my scope. Please ask the Insurance Recommender agent."
+                },
+                {
+                    "user": "What's the weather?",
+                    "assistant": "Sorry, I only assist with insurance claims."
                 }
             ],
-            "defer": "I’m the Claim Filing Helper. For product recommendations, please ask the Insurance Recommender agent."
+            "defer": "Recommendations are outside my scope. Please ask the Insurance Recommender agent."
         },
 
         "General Q&A": {
             "system": """
-    You are Kshitij, an expert Insurance Policy Q&A agent.
-    • Answer policy questions clearly in 2–4 sentences.
-    • Use a friendly, approachable tone.
+    You are Kshitij, an expert Insurance Q&A assistant.
+    • Greet the user in a friendly way.
+    • Answer ONLY general insurance‑policy questions (coverage, exclusions, billing, endorsements, premium payment, renewals).
+    • If the user asks for a recommendation or wants to file a claim, reply:
+    “That’s outside my scope. Please ask the appropriate agent.”
+    • If the question is not insurance‑related, reply:
+    “Sorry, I only answer insurance questions.”
+    • Keep answers to 2–4 sentences, clear, concise, and friendly.
     """,
             "examples": [
                 {
-                    "user": "What does my health policy cover?",
-                    "assistant": "It covers hospitalization costs, day‑care procedures, and pre‑/post‑hospitalization expenses up to the sum insured."
+                    "user": "What is not covered under my health policy?",
+                    "assistant": "Typically, pre‑existing conditions, cosmetic procedures, and experimental treatments are excluded. Please check your policy schedule for specifics."
+                },
+                {
+                    "user": "Can you recommend a plan?",
+                    "assistant": "That’s outside my scope. Please ask the Insurance Recommender agent."
+                },
+                {
+                    "user": "How do I check claim status?",
+                    "assistant": "That’s outside my scope. Please ask the Claim Filing Helper agent."
                 }
             ],
-            "defer": "I’m the Q&A agent. For product recommendations, ask the Insurance Recommender; for claims, ask the Claim Filing Helper."
+            "defer": "That’s outside my scope. Please ask the appropriate agent."
         }
     }
 
@@ -252,39 +324,34 @@ def get_mistral_response(prompt, user_input):
         return f"❌ API Error: {response.status_code} - {response.text}"
 
 
-def route_or_call(agent_key, user_input):
+def route_or_call(agent_key, user_input, system_prompt=None):
     """
-    Routes out‑of‑scope queries to the agent’s defer message,
-    otherwise builds the system prompt + examples and calls the LLM.
+    Builds the prompt and calls the LLM, then trims hallucinated follow-up turns.
     """
-    lower = user_input.lower()
-    # 👉 1) Handle greetings directly
-    if lower.strip() in ["hi", "hello", "hey"]:
-        return "👋 Hello! Please enter a question about insurance so I can assist you effectively."
-
     p = PROMPTS[agent_key]
-
-    # 1) Defer if it’s outside this agent’s domain
-    if agent_key == "Insurance Recommender" and "claim" in lower:
-        return p["defer"]
-    if agent_key == "Claim Filing Helper" and any(k in lower for k in ["recommend", "plan", "suggest"]):
-        return p["defer"]
-    if agent_key == "General Q&A" and any(k in lower for k in ["recommend", "claim", "file"]):
-        return p["defer"]
-
-    # 2) Build prompt + few‑shot examples
-    prompt = p["system"].strip()
+    # 1) choose system prompt
+    prompt = (system_prompt or p["system"].strip())
+    # 2) add examples
     for ex in p["examples"]:
         prompt += f"\n\nUser: {ex['user']}\nAssistant: {ex['assistant']}"
+    # 3) add current user input
     prompt += f"\n\nUser: {user_input}\nAssistant:"
+    # 4) call LLM
+    raw = get_mistral_response(prompt, user_input)
 
-    # 3) Call the LLM
-    return get_mistral_response(prompt, user_input)
+    # 🔥 Trim hallucinated Q&A: cut at first "User:" if LLM starts a new turn
+    if "\nUser:" in raw:
+        raw = raw.split("\nUser:")[0].strip()
+    # 🔥 Also trim if LLM repeats "Assistant:" later
+    if "\nAssistant:" in raw[1:]:
+        raw = raw.split("\nAssistant:")[0].strip()
+
+    return raw
 
 
 
-# ===========================
-# ===========================
+
+
 # ===========================
 # ===========================
 # ✅ 5) Streamlit Chat UI with Dark Mode-Friendly Styling
@@ -337,6 +404,33 @@ agent = st.selectbox(
 
 st.markdown("---")
 
+with st.sidebar.expander("👤 Your Profile (helps me personalize)"):
+    p = st.session_state.profile
+    p["age"] = st.number_input(
+        "Age", min_value=18, max_value=100,
+        value=p["age"] or 0,
+        key="profile_age"           # ← unique
+    )
+    p["income"] = st.number_input(
+        "Monthly income (₹)", min_value=0,
+        value=p["income"] or 0,
+        key="profile_income"        # ← unique
+    )
+    p["goals"] = st.text_input(
+        "Goals (e.g. savings, tax benefits)",
+        value=p["goals"] or "",
+        key="profile_goals"         # ← unique
+    )
+    p["risk_appetite"] = st.selectbox(
+        "Risk appetite", ["Low", "Medium", "High"],
+        index=(["Low","Medium","High"].index(p["risk_appetite"])
+               if p["risk_appetite"] else 1),
+        key="profile_risk"          # ← unique
+    )
+
+
+
+
 # Chat history container with dark-friendly styling
 
 
@@ -385,6 +479,21 @@ else:
 
 st.markdown("</div>", unsafe_allow_html=True)
 
+
+def build_prompt_with_profile(agent_key, user_input):
+    # 1) Build the profile header
+    p = st.session_state.profile
+    profile_text = (
+        f"User Profile:\n"
+        f"- Age: {p['age']}  •  Income: ₹{p['income']}/mo\n"
+        f"- Goals: {p['goals']}\n"
+        f"- Risk Appetite: {p['risk_appetite']}\n\n"
+    )
+    # 2) Prepend it to the agent’s system prompt
+    base = PROMPTS[agent_key]["system"].strip()
+    return profile_text + base
+
+
 # Chat input prompt with clear instructions
 st.markdown("<h3 style='color:#4A90E2;'>💬 Type your question below:</h3>", unsafe_allow_html=True)
 
@@ -392,9 +501,16 @@ user_input = st.chat_input("E.g., I am 30 years old with a budget of 20,000/year
 
 if user_input:
     with st.spinner(f"💭 Talking to {agent}..."):
-        answer = route_or_call(agent, user_input)
+        # Build a personalized prompt
+        system_with_profile = build_prompt_with_profile(agent, user_input)
+        # Call the router/agent using that enriched system prompt
+        system_with_profile = build_prompt_with_profile(agent, user_input)
+        answer = route_or_call(agent, user_input, system_prompt=system_with_profile)
 
-        now = datetime.now().strftime("%B %d, %I:%M %p")
+
+        import pytz
+        IST = pytz.timezone("Asia/Kolkata")
+        now = datetime.now(IST).strftime("%B %d, %I:%M %p")
 
         # Save this turn to session state
         st.session_state.chat_history.append({
@@ -465,4 +581,4 @@ if st.session_state.chat_history:
 #             unsafe_allow_html=True,
 #         )
 
-        
+
