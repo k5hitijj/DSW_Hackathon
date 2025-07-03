@@ -407,7 +407,7 @@ st.markdown("---")
 with st.sidebar.expander("👤 Your Profile (helps me personalize)"):
     p = st.session_state.profile
     p["age"] = st.number_input(
-        "Age", min_value=18, max_value=100,
+        "Age", min_value=1, max_value=100,
         value=p["age"] or 0,
         key="profile_age"           # ← unique
     )
